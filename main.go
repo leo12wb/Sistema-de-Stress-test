@@ -9,74 +9,75 @@ import (
 )
 
 type Result struct {
-	TotalRequests        int
-	SuccessfulRequests   int
-	FailedRequests       int
-	StatusDistribution   map[int]int
-	TotalTime            time.Duration
+	StatusCode int
 }
 
-func runLoadTest(url string, totalRequests, concurrency int) Result {
-	start := time.Now()
+func worker(url string, wg *sync.WaitGroup, results chan<- Result) {
+	defer wg.Done()
 
-	results := Result{
-		TotalRequests:      totalRequests,
-		StatusDistribution: make(map[int]int),
+	resp, err := http.Get(url)
+	if err != nil {
+		results <- Result{StatusCode: 0}
+		return
 	}
+	defer resp.Body.Close()
 
-	var wg sync.WaitGroup
-	ch := make(chan int, concurrency)
-
-	for i := 0; i < totalRequests; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			ch <- 1
-
-			resp, err := http.Get(url)
-			if err != nil {
-				results.FailedRequests++
-			} else {
-				results.SuccessfulRequests++
-				results.StatusDistribution[resp.StatusCode]++
-			}
-
-			<-ch
-		}()
-	}
-
-	wg.Wait()
-	results.TotalTime = time.Since(start)
-	return results
-}
-
-func generateReport(results Result) {
-	fmt.Println("Load Test Report:")
-	fmt.Println("Total Time:", results.TotalTime)
-	fmt.Println("Total Requests:", results.TotalRequests)
-	fmt.Println("Successful Requests:", results.SuccessfulRequests)
-	fmt.Println("Failed Requests:", results.FailedRequests)
-	fmt.Println("Status Distribution:")
-	for status, count := range results.StatusDistribution {
-		fmt.Printf("%d: %d\n", status, count)
-	}
+	results <- Result{StatusCode: resp.StatusCode}
 }
 
 func main() {
-	var url string
-	var totalRequests, concurrency int
-
-	flag.StringVar(&url, "url", "", "URL do serviço a ser testado.")
-	flag.IntVar(&totalRequests, "requests", 0, "Número total de requests.")
-	flag.IntVar(&concurrency, "concurrency", 1, "Número de chamadas simultâneas.")
-
+	// Parâmetros de CLI
+	url := flag.String("url", "", "URL do serviço a ser testado")
+	requests := flag.Int("requests", 1, "Número total de requests")
+	concurrency := flag.Int("concurrency", 1, "Número de chamadas simultâneas")
 	flag.Parse()
 
-	if url == "" || totalRequests == 0 || concurrency == 0 {
-		flag.PrintDefaults()
+	// Validação de parâmetros
+	if *url == "" || *requests <= 0 || *concurrency <= 0 {
+		flag.Usage()
 		return
 	}
 
-	results := runLoadTest(url, totalRequests, concurrency)
-	generateReport(results)
+	// Canal para resultados
+	results := make(chan Result, *requests)
+	var wg sync.WaitGroup
+
+	startTime := time.Now()
+
+	// Execução das goroutines
+	for i := 0; i < *requests; i++ {
+		wg.Add(1)
+		go worker(*url, &wg, results)
+		if i % *concurrency == 0 {
+			wg.Wait()
+		}
+	}
+
+	wg.Wait()
+	close(results)
+
+	// Coleta dos resultados
+	var totalRequests int
+	var successRequests int
+	statusCodeCounts := make(map[int]int)
+
+	for result := range results {
+		totalRequests++
+		if result.StatusCode == http.StatusOK {
+			successRequests++
+		}
+		statusCodeCounts[result.StatusCode]++
+	}
+
+	endTime := time.Now()
+	duration := endTime.Sub(startTime)
+
+	// Relatório
+	fmt.Printf("Tempo total: %v\n", duration)
+	fmt.Printf("Total de requests: %d\n", totalRequests)
+	fmt.Printf("Requests com status 200: %d\n", successRequests)
+	fmt.Println("Distribuição dos códigos de status HTTP:")
+	for code, count := range statusCodeCounts {
+		fmt.Printf("%d: %d\n", code, count)
+	}
 }

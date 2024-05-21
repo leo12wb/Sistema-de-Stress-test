@@ -1,14 +1,24 @@
-# Imagem base
-FROM golang:latest
+# Etapa de construção
+FROM golang:1.19-alpine AS builder
 
-# Define o diretório de trabalho dentro do contêiner
+# Configurar diretório de trabalho
 WORKDIR /app
 
-# Copia o código fonte para o diretório de trabalho
+
+# Copiar o restante dos arquivos do projeto
 COPY . .
 
-# Compila o aplicativo
-RUN go build -o load-test .
+# Compilar a aplicação
+RUN go build -o loadtester .
 
-# Comando padrão para executar o aplicativo
-CMD ["./load-test"]
+# Etapa final
+FROM alpine:3.15
+
+# Configurar diretório de trabalho
+WORKDIR /app
+
+# Copiar o binário compilado da etapa anterior
+COPY --from=builder /app/loadtester .
+
+# Comando de entrada
+ENTRYPOINT ["./loadtester"]
