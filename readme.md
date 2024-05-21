@@ -8,26 +8,16 @@ LoadTester é uma aplicação de linha de comando (CLI) escrita em Go para reali
 - Suporte para definir o número total de requests e o nível de concorrência.
 - Geração de relatório com tempo total de execução, quantidade de requests realizados, quantidade de requests com status HTTP 200 e distribuição de outros códigos de status HTTP.
 
-## Pré-requisitos
-
-- Go 1.19 ou superior.
-- Docker (opcional, para execução via contêiner).
-
 ## Instalação
 
 ### Clonando o Repositório
 
 ```sh
 git clone 
+
+docker-compose up
 ```
-go mod tidy
-go build -o stresstest
 
-docker build -t stresstest .
-
-./Sistema-de-Stress-test --url=http://google.com --requests=1000 --concurrency=10
-
-docker run --rm stresstest --url=http://google.com --requests=1000 --concurrency=10
 
 Exemplo de saída:
 

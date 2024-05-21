@@ -1,0 +1,8 @@
+version: '3.8'
+
+services:
+  loadtester:
+    build: .
+    ports:
+      - "8080:8080"
+    command: ["./", "--url=http://google.com", "--requests=1000", "--concurrency=10"]
